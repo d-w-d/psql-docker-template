@@ -226,6 +226,7 @@ Security consideration:
 - `*` is flexible but broad
 - Prefer specific addresses where possible
 - Enforce firewall rules and strict `pg_hba.conf` entries
+- If deployed to cloud VMs, also restrict security groups to trusted source IP ranges
 
 ---
 
@@ -271,6 +272,12 @@ Example `pg_hba.conf` line:
 
 ```conf
 host    all    all    172.17.0.0/16    scram-sha-256
+```
+
+In this repository, `pg_hba.conf` is versioned at `configdir/pg_hba.conf` and loaded by PostgreSQL using:
+
+```text
+-c hba_file=/etc/postgresql/pg_hba.conf
 ```
 
 Example role/database setup:

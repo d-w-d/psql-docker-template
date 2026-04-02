@@ -13,6 +13,7 @@ Repository layout:
 - `docker-compose.yml` - defines the `db` service (`postgres:16.4`).
 - `datadir/` - persistent PostgreSQL data (mounted into `db`).
 - `configdir/` - PostgreSQL configuration mounted into the server (`/etc/postgresql/`).
+- `configdir/pg_hba.conf` - client authentication rules (source IP/CIDR + auth method).
 - `_psql_connect` - helper to connect to PostgreSQL from the host.
 - `_mysql_connect` - backward-compatible alias that forwards to `_psql_connect`.
 - `.env-template` - environment template you copy to `.env`.
@@ -124,11 +125,27 @@ CREATE DATABASE my_app_db OWNER my_app;
 - The compose file uses `network_mode: host`.
 - PostgreSQL listens on port `5432`.
 - `POSTGRES_LISTEN_ADDRESSES` controls which host interfaces PostgreSQL binds to.
-  - Default: `127.0.0.1` (localhost only)
+  - Default: `*` (all IPv4/IPv6 interfaces)
   - Example for local + docker bridge: `127.0.0.1,172.17.0.1`
-  - Example for all IPv4 interfaces: `*`
+- `configdir/pg_hba.conf` controls which source IP ranges are allowed to authenticate.
+  - This template currently allows `0.0.0.0/0` and `::/0` with `scram-sha-256`.
+  - For production, restrict those CIDRs to trusted sources.
 
 See `README.networking101.md` for a detailed explanation of interfaces, binding, and troubleshooting.
+
+## EC2 Reachability Checklist
+
+If you want to connect from your laptop to PostgreSQL running on EC2:
+
+1. `POSTGRES_LISTEN_ADDRESSES='*'` in `.env` (already default in this template).
+2. `configdir/pg_hba.conf` has a matching `host` rule for your source IP/CIDR.
+3. EC2 security group allows inbound TCP 5432 from your source IP/CIDR.
+4. NACLs and host firewall (`ufw`/iptables) allow 5432.
+5. Use the EC2 public IP or DNS from your laptop, for example:
+
+```bash
+PGPASSWORD='<password>' psql -h <ec2-public-ip-or-dns> -p 5432 -U postgres -d postgres
+```
 
 ## Misc Notes
 

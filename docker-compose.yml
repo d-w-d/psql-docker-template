@@ -22,9 +22,11 @@ services:
       - -c
       - config_file=/etc/postgresql/postgresql.conf
       - -c
-      - listen_addresses=${POSTGRES_LISTEN_ADDRESSES:-127.0.0.1}
+      - listen_addresses=${POSTGRES_LISTEN_ADDRESSES:-*}
       - -c
       - port=${POSTGRES_PORT:-5432}
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
     # Use host network mode to make docker run on the same network as the host
-    # By default, postgres will then listen on 127.0.0.1:5432 on the host
+    # By default, postgres will then listen on *:5432 on the host
     network_mode: host
