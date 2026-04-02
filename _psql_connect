@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Quick connect to the docker postgresql instance
+
+set -euo pipefail
+
+if [[ -f .env ]]; then
+    set -a
+    source .env
+    set +a
+fi
+
+USER="${POSTGRES_CONNECT_USER:-${PGUSER:-${POSTGRES_USER:-postgres}}}"
+USER_PASSWORD="${POSTGRES_CONNECT_PASSWORD:-${PGPASSWORD:-${POSTGRES_PASSWORD:-}}}"
+DATABASE="${POSTGRES_CONNECT_DB:-${PGDATABASE:-${POSTGRES_DB:-postgres}}}"
+HOST="${POSTGRES_HOST:-localhost}"
+PORT="${POSTGRES_PORT:-5432}"
+
+echo "Connecting with user: $USER"
+echo "Connecting to db: $DATABASE"
+
+# Resolve psql client: prefer POSTGRES_CLIENT from .env, otherwise use psql from PATH
+PSQL_CLIENT_CMD=""
+if [[ -n "${POSTGRES_CLIENT:-}" ]]; then
+    if [[ -x "$POSTGRES_CLIENT" ]]; then
+        PSQL_CLIENT_CMD="$POSTGRES_CLIENT"
+    elif command -v "$POSTGRES_CLIENT" >/dev/null 2>&1; then
+        PSQL_CLIENT_CMD="$(command -v "$POSTGRES_CLIENT")"
+    fi
+fi
+if [[ -z "$PSQL_CLIENT_CMD" ]]; then
+    if command -v psql >/dev/null 2>&1; then
+        PSQL_CLIENT_CMD="$(command -v psql)"
+    else
+        echo "Error: psql client not found in PATH and POSTGRES_CLIENT is not set. Install psql client or set POSTGRES_CLIENT in .env" >&2
+        exit 1
+    fi
+fi
+
+echo "Using psql client: $PSQL_CLIENT_CMD"
+sleep 1
+
+if [[ -n "$USER_PASSWORD" ]]; then
+    PGPASSWORD="$USER_PASSWORD" "$PSQL_CLIENT_CMD" \
+        --host="$HOST" \
+        --port="$PORT" \
+        --username="$USER" \
+        --dbname="$DATABASE"
+else
+    "$PSQL_CLIENT_CMD" \
+        --host="$HOST" \
+        --port="$PORT" \
+        --username="$USER" \
+        --dbname="$DATABASE"
+fi

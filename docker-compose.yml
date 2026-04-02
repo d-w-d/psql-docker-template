@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16.4
+    container_name: mypostgres
+    restart: always
+    # The first time you run this container, the only env
+    # variable that is needed is $POSTGRES_PASSWORD
+    # You can then log in as 'postgres', and create other users,
+    # roles, and databases
+    env_file:
+      - ./.env
+    # When you first run this container it will create
+    # a boilerplate postgres data dir; actions carried out on the
+    # DB (creating dbs, tables, roles, etc.), will be recorded
+    # here; subsequent restarts of the container will use this
+    # volume-mounted dir, and so previous data will be restored
+    volumes:
+      - ./datadir:/var/lib/postgresql/data
+      - ./configdir:/etc/postgresql:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - listen_addresses=${POSTGRES_LISTEN_ADDRESSES:-127.0.0.1}
+      - -c
+      - port=${POSTGRES_PORT:-5432}
+    # Use host network mode to make docker run on the same network as the host
+    # By default, postgres will then listen on 127.0.0.1:5432 on the host
+    network_mode: host
