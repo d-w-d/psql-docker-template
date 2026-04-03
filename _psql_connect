@@ -4,22 +4,13 @@
 
 set -euo pipefail
 
-# Preserve caller-provided environment so sourcing .env does not override explicit values.
+# Preserve caller-provided values so sourcing .env does not override them.
 PRESERVE_VARS=(
-    POSTGRES_CONNECT_USER
-    POSTGRES_CONNECT_PASSWORD
-    POSTGRES_CONNECT_DB
-    POSTGRES_USER
-    POSTGRES_PASSWORD
-    POSTGRES_DB
+    APP_DB_USER
+    APP_DB_PASSWORD
+    APP_DB_NAME
     POSTGRES_HOST
     POSTGRES_PORT
-    POSTGRES_CLIENT
-    PGUSER
-    PGPASSWORD
-    PGDATABASE
-    POSTGRES_CONNECT_TIMEOUT
-    PGCONNECT_TIMEOUT
 )
 
 for _var in "${PRESERVE_VARS[@]}"; do
@@ -45,48 +36,32 @@ for _var in "${PRESERVE_VARS[@]}"; do
     fi
 done
 
-USER="${POSTGRES_CONNECT_USER:-${PGUSER:-${POSTGRES_USER:-postgres}}}"
-USER_PASSWORD="${POSTGRES_CONNECT_PASSWORD:-${PGPASSWORD:-${POSTGRES_PASSWORD:-}}}"
-DATABASE="${POSTGRES_CONNECT_DB:-${PGDATABASE:-${POSTGRES_DB:-postgres}}}"
+USER="${APP_DB_USER:-}"
+USER_PASSWORD="${APP_DB_PASSWORD:-}"
+DATABASE="${APP_DB_NAME:-}"
 HOST="${POSTGRES_HOST:-localhost}"
 PORT="${POSTGRES_PORT:-5432}"
-CONNECT_TIMEOUT="${POSTGRES_CONNECT_TIMEOUT:-${PGCONNECT_TIMEOUT:-5}}"
+CONNECT_TIMEOUT="5"
+
+if [[ -z "$USER" || -z "$USER_PASSWORD" || -z "$DATABASE" ]]; then
+    echo "Error: APP_DB_USER, APP_DB_PASSWORD, and APP_DB_NAME must be set (in .env or inline env)." >&2
+    exit 1
+fi
+
+if ! command -v psql >/dev/null 2>&1; then
+    echo "Error: psql client not found in PATH. Install PostgreSQL client tools." >&2
+    exit 1
+fi
+PSQL_CLIENT_CMD="$(command -v psql)"
 
 echo "Connecting with user: $USER"
 echo "Connecting to db: $DATABASE"
 echo "Connecting to host: $HOST:$PORT (timeout=${CONNECT_TIMEOUT}s)"
-
-# Resolve psql client: prefer POSTGRES_CLIENT from .env, otherwise use psql from PATH
-PSQL_CLIENT_CMD=""
-if [[ -n "${POSTGRES_CLIENT:-}" ]]; then
-    if [[ -x "$POSTGRES_CLIENT" ]]; then
-        PSQL_CLIENT_CMD="$POSTGRES_CLIENT"
-    elif command -v "$POSTGRES_CLIENT" >/dev/null 2>&1; then
-        PSQL_CLIENT_CMD="$(command -v "$POSTGRES_CLIENT")"
-    fi
-fi
-if [[ -z "$PSQL_CLIENT_CMD" ]]; then
-    if command -v psql >/dev/null 2>&1; then
-        PSQL_CLIENT_CMD="$(command -v psql)"
-    else
-        echo "Error: psql client not found in PATH and POSTGRES_CLIENT is not set. Install psql client or set POSTGRES_CLIENT in .env" >&2
-        exit 1
-    fi
-fi
-
 echo "Using psql client: $PSQL_CLIENT_CMD"
 sleep 1
 
-if [[ -n "$USER_PASSWORD" ]]; then
-    PGPASSWORD="$USER_PASSWORD" PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT" "$PSQL_CLIENT_CMD" \
-        --host="$HOST" \
-        --port="$PORT" \
-        --username="$USER" \
-        --dbname="$DATABASE"
-else
-    PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT" "$PSQL_CLIENT_CMD" \
-        --host="$HOST" \
-        --port="$PORT" \
-        --username="$USER" \
-        --dbname="$DATABASE"
-fi
+PGPASSWORD="$USER_PASSWORD" PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT" "$PSQL_CLIENT_CMD" \
+    --host="$HOST" \
+    --port="$PORT" \
+    --username="$USER" \
+    --dbname="$DATABASE"
