@@ -4,20 +4,57 @@
 
 set -euo pipefail
 
+# Preserve caller-provided environment so sourcing .env does not override explicit values.
+PRESERVE_VARS=(
+    POSTGRES_CONNECT_USER
+    POSTGRES_CONNECT_PASSWORD
+    POSTGRES_CONNECT_DB
+    POSTGRES_USER
+    POSTGRES_PASSWORD
+    POSTGRES_DB
+    POSTGRES_HOST
+    POSTGRES_PORT
+    POSTGRES_CLIENT
+    PGUSER
+    PGPASSWORD
+    PGDATABASE
+    POSTGRES_CONNECT_TIMEOUT
+    PGCONNECT_TIMEOUT
+)
+
+for _var in "${PRESERVE_VARS[@]}"; do
+    if [[ -n "${!_var+x}" ]]; then
+        export "__PRESERVE_${_var}=${!_var}"
+        export "__HAS_PRESERVE_${_var}=1"
+    fi
+done
+
 if [[ -f .env ]]; then
     set -a
     source .env
     set +a
 fi
 
+for _var in "${PRESERVE_VARS[@]}"; do
+    _flag="__HAS_PRESERVE_${_var}"
+    if [[ -n "${!_flag:-}" ]]; then
+        _saved="__PRESERVE_${_var}"
+        printf -v "$_var" '%s' "${!_saved}"
+        export "$_var"
+        unset "$_flag" "$_saved"
+    fi
+done
+
 USER="${POSTGRES_CONNECT_USER:-${PGUSER:-${POSTGRES_USER:-postgres}}}"
 USER_PASSWORD="${POSTGRES_CONNECT_PASSWORD:-${PGPASSWORD:-${POSTGRES_PASSWORD:-}}}"
 DATABASE="${POSTGRES_CONNECT_DB:-${PGDATABASE:-${POSTGRES_DB:-postgres}}}"
 HOST="${POSTGRES_HOST:-localhost}"
 PORT="${POSTGRES_PORT:-5432}"
+CONNECT_TIMEOUT="${POSTGRES_CONNECT_TIMEOUT:-${PGCONNECT_TIMEOUT:-5}}"
 
 echo "Connecting with user: $USER"
 echo "Connecting to db: $DATABASE"
+echo "Connecting to host: $HOST:$PORT (timeout=${CONNECT_TIMEOUT}s)"
 
 # Resolve psql client: prefer POSTGRES_CLIENT from .env, otherwise use psql from PATH
 PSQL_CLIENT_CMD=""
@@ -41,13 +78,13 @@ echo "Using psql client: $PSQL_CLIENT_CMD"
 sleep 1
 
 if [[ -n "$USER_PASSWORD" ]]; then
-    PGPASSWORD="$USER_PASSWORD" "$PSQL_CLIENT_CMD" \
+    PGPASSWORD="$USER_PASSWORD" PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT" "$PSQL_CLIENT_CMD" \
         --host="$HOST" \
         --port="$PORT" \
         --username="$USER" \
         --dbname="$DATABASE"
 else
-    "$PSQL_CLIENT_CMD" \
+    PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT" "$PSQL_CLIENT_CMD" \
         --host="$HOST" \
         --port="$PORT" \
         --username="$USER" \

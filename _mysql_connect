@@ -1,7 +1,0 @@
-#!/bin/bash
-# Backward-compatible alias for older usage.
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "This repository now targets PostgreSQL. Forwarding to _psql_connect..."
-exec "$SCRIPT_DIR/_psql_connect"

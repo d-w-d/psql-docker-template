@@ -137,6 +137,8 @@ See `README.networking101.md` for a detailed explanation of interfaces, binding,
 
 If you want to connect from your laptop to PostgreSQL running on EC2:
 
+Important: do not assume an Ubuntu EC2 host has no firewall rules. `ufw` may be active and can block port `5432` even when the EC2 security group allows it.
+
 1. `POSTGRES_LISTEN_ADDRESSES='*'` in `.env` (already default in this template).
 2. `configdir/pg_hba.conf` has a matching `host` rule for your source IP/CIDR.
 3. EC2 security group allows inbound TCP 5432 from your source IP/CIDR.
