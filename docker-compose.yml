@@ -3,10 +3,9 @@ services:
     image: postgres:16.4
     container_name: mypostgres
     restart: always
-    # The first time you run this container, the only env
-    # variable that is needed is $POSTGRES_PASSWORD
-    # You can then log in as 'postgres', and create other users,
-    # roles, and databases
+    # First startup uses env from .env:
+    # - POSTGRES_USER / POSTGRES_PASSWORD configure superuser bootstrap
+    # - APP_DB_USER / APP_DB_PASSWORD / APP_DB_NAME (optional) create app role+db
     env_file:
       - ./.env
     # When you first run this container it will create
@@ -17,6 +16,7 @@ services:
     volumes:
       - ./datadir:/var/lib/postgresql/data
       - ./configdir:/etc/postgresql:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     command:
       - postgres
       - -c

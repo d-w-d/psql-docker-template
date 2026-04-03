@@ -14,6 +14,7 @@ Repository layout:
 - `datadir/` - persistent PostgreSQL data (mounted into `db`).
 - `configdir/` - PostgreSQL configuration mounted into the server (`/etc/postgresql/`).
 - `configdir/pg_hba.conf` - client authentication rules (source IP/CIDR + auth method).
+- `initdb/` - first-run initialization scripts mounted into `/docker-entrypoint-initdb.d/`.
 - `_psql_connect` - helper to connect to PostgreSQL from the host.
 - `_mysql_connect` - backward-compatible alias that forwards to `_psql_connect`.
 - `.env-template` - environment template you copy to `.env`.
@@ -30,8 +31,11 @@ Prerequisites:
 git clone https://example.com/your/postgres-docker-template.git
 cd postgres-docker-template
 cp -n .env-template .env
-# Edit .env - minimally set:
-#   POSTGRES_PASSWORD
+# Edit .env and set:
+#   POSTGRES_PASSWORD       (superuser password)
+#   APP_DB_USER             (normal app user)
+#   APP_DB_PASSWORD         (normal app user password)
+#   APP_DB_NAME             (application database)
 ```
 
 2. If you previously used this folder for MySQL, reset or rename `./datadir` before first PostgreSQL startup.
@@ -60,20 +64,15 @@ Equivalent direct command:
 PGPASSWORD='<password>' psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
 ```
 
-## Default behavior: no additional roles/databases created
+## Recommended Bootstrap Pattern (Superuser + App User)
 
-This template spins up a vanilla PostgreSQL server intended to host multiple databases and users. By default, the container:
+This template supports a best-practice bootstrap:
 
-- Does not create any non-superuser roles.
-- Only requires you to set `POSTGRES_PASSWORD` in `.env`.
-- Persists data in `./datadir/` so subsequent restarts reuse the same server state.
+- Superuser for admin tasks: `POSTGRES_USER` + `POSTGRES_PASSWORD`
+- Normal application user: `APP_DB_USER` + `APP_DB_PASSWORD`
+- Application database: `APP_DB_NAME` (owned by `APP_DB_USER`)
 
-Create databases and roles yourself after the server starts, for example:
-
-```sql
-CREATE ROLE my_app LOGIN PASSWORD 'strong_password_here';
-CREATE DATABASE my_app_db OWNER my_app;
-```
+On first startup only (when `./datadir/` is empty), `initdb/10-create-app-role-and-db.sh` will create the app role and DB automatically if all `APP_DB_*` variables are set.
 
 ## Optional: first-run initialization via official PostgreSQL image
 
@@ -88,14 +87,17 @@ This repository keeps defaults minimal and multi-tenant-friendly. If you want a 
 ```env
 POSTGRES_USER='postgres'
 POSTGRES_PASSWORD='change-me'
-POSTGRES_DB='my_app_db'
+POSTGRES_DB='postgres'
+APP_DB_USER='my_app'
+APP_DB_PASSWORD='strong_password_here'
+APP_DB_NAME='my_app_db'
 ```
 
 Notes:
 
 - These initialization variables only take effect when the data directory is empty (first run).
 - If you've already started the server once, remove or rename `./datadir/` to trigger initialization (be careful - this destroys data).
-- For multi-database hosting, it's perfectly fine to keep defaults and create databases/roles manually.
+- `APP_DB_*` variables are handled by this repo's init script and also only apply on first run.
 
 ## PostgreSQL Config Best Practices
 
@@ -107,13 +109,15 @@ Server config in `configdir/postgresql.conf` is mounted into `/etc/postgresql/po
 
 ### How to create a user and DB
 
+- If you set `APP_DB_USER`, `APP_DB_PASSWORD`, and `APP_DB_NAME` before first startup, the role/db are created automatically.
+
 - Connect to PostgreSQL using the helper:
 
 ```bash
 ./_psql_connect
 ```
 
-- Create a role and database; replace `my_app_db` and `my_app` with your desired values:
+- Manual SQL (if you skipped automatic init):
 
 ```sql
 CREATE ROLE my_app LOGIN PASSWORD 'strong_password_here';
@@ -128,6 +132,7 @@ CREATE DATABASE my_app_db OWNER my_app;
   - Default: `*` (all IPv4/IPv6 interfaces)
   - Example for local + docker bridge: `127.0.0.1,172.17.0.1`
 - `configdir/pg_hba.conf` controls which source IP ranges are allowed to authenticate.
+  - Local socket auth is set to `trust` to avoid bootstrap failures when `POSTGRES_USER` is customized.
   - This template currently allows `0.0.0.0/0` and `::/0` with `scram-sha-256`.
   - For production, restrict those CIDRs to trusted sources.
 
